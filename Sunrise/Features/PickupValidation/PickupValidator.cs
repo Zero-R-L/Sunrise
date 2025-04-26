@@ -1,3 +1,6 @@
+using System;
+using AdminToys;
+using Exiled.API.Extensions;
 using Exiled.API.Features.Pickups;
 using Exiled.API.Features.Roles;
 using Exiled.Events.EventArgs.Player;
@@ -14,7 +17,9 @@ internal static class PickupValidator
     internal static readonly Dictionary<LockerChamber, float> LockerLastInteraction = new();
     internal static readonly Dictionary<DoorVariant, float> DoorLastInteraction = new();
 
-    [UsedImplicitly] public static bool AlwaysBlock;
+    static readonly RaycastHit[] HitBuffer = new RaycastHit[32];
+
+    [UsedImplicitly] public static bool AlwaysBlock { get; set; }
 
     internal static void OnPickingUpItem(PickingUpItemEventArgs ev)
     {
@@ -95,15 +100,14 @@ internal static class PickupValidator
     {
         foreach (Vector3 corner in GetCorners(bounds))
         {
-            if (!IsObstructed(position, corner, out RaycastHit hit, bypassTime))
-            {
-                Debug.DrawLine(position, corner, Colors.Green * 50, 10f);
-                return true;
-            }
-            else
+            if (IsObstructed(position, corner, out RaycastHit hit, bypassTime))
             {
                 Debug.Log($"Hit {hit.collider?.gameObject?.name} ({hit.collider?.gameObject?.layer:G}) at {hit.point}");
+                continue;
             }
+
+            Debug.DrawLine(position, corner, Colors.Green * 50, 10f);
+            return true;
         }
 
         return false;
@@ -118,20 +122,6 @@ internal static class PickupValidator
             jumpHeight = hit.distance - 0.05f;
 
         return upRay.GetPoint(jumpHeight);
-    }
-
-    static bool IsObstructed(Vector3 a, Vector3 b, out RaycastHit hit, float bypassTime) => Physics.Linecast(a, b, out hit, (int)Mask.HitregObstacles) && !CanIgnoreHit(hit, bypassTime);
-
-    static bool CanIgnoreHit(RaycastHit hit, float bypassTime)
-    {
-        int layer = hit.collider.gameObject.layer;
-
-        return (Layer)layer switch
-        {
-            Layer.Doors => hit.collider.gameObject.GetComponentInParent<DoorVariant>() is DoorVariant door && DoorLastInteraction.TryGetValue(door, out float time) && time + bypassTime > Time.time,
-            Layer.Glass => hit.collider.GetComponentInParent<LockerChamber>() is LockerChamber locker && LockerLastInteraction.TryGetValue(locker, out float time) && time + bypassTime > Time.time,
-            _ => false,
-        };
     }
 
     static IEnumerable<Vector3> GetCorners(Bounds bounds)
@@ -150,5 +140,49 @@ internal static class PickupValidator
         yield return center + new Vector3(-extents.x, extents.y, -extents.z);
         yield return center + new Vector3(-extents.x, -extents.y, extents.z);
         yield return center + new Vector3(-extents.x, -extents.y, -extents.z);
+    }
+
+    static bool IsObstructed(Vector3 a, Vector3 b, out RaycastHit hit, float bypassTime) //todo test
+    {
+        var ray = new Ray(a, b - a);
+        int count = Physics.RaycastNonAlloc(ray, HitBuffer, Vector3.Distance(a, b), (int)Mask.HitregObstacles);
+
+        // Sort hits by distance
+        Array.Sort(HitBuffer, 0, count, RaycastHitComparer.Instance);
+
+        for (var i = 0; i < count; i++)
+        {
+            hit = HitBuffer[i];
+
+            // Pass through ignored colliders
+            switch ((Layer)hit.collider.gameObject.layer)
+            {
+                // Moving doors 
+                case Layer.Doors when hit.collider.gameObject.GetComponentInParent<DoorVariant>() is DoorVariant door && DoorLastInteraction.TryGetValue(door, out float time) && time + bypassTime > Time.time:
+
+                // Moving SCP pedestal doors
+                case Layer.Glass when hit.collider.GetComponentInParent<LockerChamber>() is LockerChamber locker && LockerLastInteraction.TryGetValue(locker, out time) && time + bypassTime > Time.time:
+
+                // Primitives with collision disabled
+                case Layer.DefaultColliders when hit.collider.GetComponentInParent<PrimitiveObjectToy>() is PrimitiveObjectToy toy && !toy.NetworkPrimitiveFlags.HasFlagFast(PrimitiveFlags.Collidable):
+                {
+                    Debug.DrawPoint(hit.point, Colors.Green * 50, 10f);
+                    continue;
+                }
+            }
+
+            // Obstruction found
+            return true;
+        }
+
+        // No obstructions
+        hit = default;
+        return false;
+    }
+
+    class RaycastHitComparer : IComparer<RaycastHit>
+    {
+        public static readonly RaycastHitComparer Instance = new();
+        public int Compare(RaycastHit hitA, RaycastHit hitB) => hitA.distance.CompareTo(hitB.distance);
     }
 }

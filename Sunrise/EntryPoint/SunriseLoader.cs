@@ -16,6 +16,7 @@ public class SunriseLoader : PluginModule
         // API
         new BacktrackingModule(),
         new AntiWallhackModule(),
+        new VisibilityModule(),
 
         // Features
         new PickupValidationModule(),

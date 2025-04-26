@@ -15,7 +15,7 @@ internal class VisibilityModule : PluginModule
         SeedSynchronizer.OnGenerationStage -= OnMapGenerationStage;
     }
 
-    void OnMapGenerationStage(MapGenerationPhase mapGenerationStage)
+    static void OnMapGenerationStage(MapGenerationPhase mapGenerationStage)
     {
         if (mapGenerationStage == MapGenerationPhase.RelativePositioningWaypoints)
         {

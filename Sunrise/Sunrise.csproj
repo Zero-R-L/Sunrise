@@ -88,6 +88,7 @@
         <Compile Include="Features\AntiWallhack\ForcedVisibilityHelper.cs" />
         <Compile Include="Features\AntiWallhack\ItemVisibilityHelper.cs" />
         <Compile Include="Features\AntiWallhack\RaycastVisibilityChecker.cs"/>
+        <Compile Include="Features\CommonPatches\RceExploitPatch.cs" />
         <Compile Include="Features\DoorInteractionValidation\DoorInteractionValidationModule.cs"/>
         <Compile Include="Features\PickupEspClutter\PhantomPickup.cs"/>
         <Compile Include="Features\PickupEspClutter\PhantomPickupSpawner.cs"/>

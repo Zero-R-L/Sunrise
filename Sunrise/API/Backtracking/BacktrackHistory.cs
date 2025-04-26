@@ -36,25 +36,26 @@ public class BacktrackHistory(Player player)
 
         Vector3 forecastPosition = player.Position + direction * forecastDistance;
 
-        BacktrackEntry forecastEntry = new(forecastPosition, player.Rotation)
+        BacktrackEntry forecastEntry = new(forecastPosition, Entries.Front().Rotation)
         {
             Timestamp = Time.time + Config.Instance.AccountedLatencySeconds,
         };
-        Entries.PushFront(forecastEntry);
 
+        Entries.PushFront(forecastEntry);
         Debug.DrawPoint(forecastPosition, Color.yellow * 50);
     }
 
-    // Todo only use last rotation cause its 100% accurate
     public BacktrackEntry GetClosest(BacktrackEntry claimed)
     {
         BacktrackEntry best = default;
+        var matchFlags = EntryMatchFlags.None;
+
         var minSqrDistance = float.MaxValue;
         var minAngle = float.MaxValue;
-        var matchFlags = EntryMatchFlags.None;
 
         using IEnumerator<BacktrackEntry> enumerator = Entries.GetEnumerator(); // Entries are ordered from newest to oldest
         enumerator.MoveNext();
+
         BacktrackEntry newest = enumerator.Current;
 
         while (enumerator.MoveNext())
@@ -64,62 +65,67 @@ public class BacktrackHistory(Player player)
             Debug.DrawLine(oldest.Position, newest.Position, Colors.Blue * 50);
             Debug.DrawLine(newest.Position, newest.Position + newest.Rotation * Vector3.forward, Colors.Blue * 50);
 
-            if ((matchFlags & EntryMatchFlags.Position) == 0) // If we haven't found a suitable position yet
+            if ((matchFlags & EntryMatchFlags.Position) == 0 &&
+                TryFindBetterPosition(oldest, newest, claimed, ref best, ref minSqrDistance) && minSqrDistance < AcceptedDistance)
             {
-                float t = MathExtensions.GetClosestT(newest.Position, oldest.Position, claimed.Position);
-
-                Vector3 lerpedPosition = t switch
-                {
-                    0f => newest.Position,
-                    1f => oldest.Position,
-                    _ => Vector3.Lerp(newest.Position, oldest.Position, t),
-                };
-
-                float sqrDistance = MathExtensions.SqrDistance(claimed.Position, lerpedPosition);
-
-                if (sqrDistance < minSqrDistance)
-                {
-                    minSqrDistance = sqrDistance;
-
-                    // Add a little bit of client authority.
-                    // Increases the accuracy without meaningfully harming the security
-                    best.Position = Vector3.MoveTowards(lerpedPosition, claimed.Position, 0.1f);
-                    best.Timestamp = Mathf.Lerp(newest.Timestamp, oldest.Timestamp, t);
-
-                    if (minSqrDistance < AcceptedDistance)
-                    {
-                        matchFlags |= EntryMatchFlags.Position;
-
-                        if (matchFlags == EntryMatchFlags.All)
-                            break;
-                    }
-                }
+                matchFlags |= EntryMatchFlags.Position;
             }
 
-            if ((matchFlags & EntryMatchFlags.Rotation) == 0) // If we haven't found a suitable rotation yet
+            if ((matchFlags & EntryMatchFlags.Rotation) == 0 &&
+                TryFindBetterRotation(newest, claimed, ref best, ref minAngle) && minAngle < AcceptedAngle)
             {
-                float angle = Quaternion.Angle(newest.Rotation, claimed.Rotation);
-
-                if (angle < minAngle)
-                {
-                    minAngle = angle;
-
-                    best.Rotation = Quaternion.RotateTowards(newest.Rotation, claimed.Rotation, 1);
-
-                    if (minAngle < AcceptedAngle)
-                    {
-                        matchFlags |= EntryMatchFlags.Rotation;
-
-                        if (matchFlags == EntryMatchFlags.All)
-                            break;
-                    }
-                }
+                matchFlags |= EntryMatchFlags.Rotation;
             }
+
+            if (matchFlags == EntryMatchFlags.All)
+                break;
 
             newest = oldest;
         }
 
         return best;
+    }
+
+    static bool TryFindBetterPosition(BacktrackEntry oldest, BacktrackEntry newest, BacktrackEntry claimed, ref BacktrackEntry best, ref float minSqrDistance)
+    {
+        float t = MathExtensions.GetClosestT(newest.Position, oldest.Position, claimed.Position);
+
+        Vector3 lerpedPosition = t switch
+        {
+            0f => newest.Position,
+            1f => oldest.Position,
+            _ => Vector3.Lerp(newest.Position, oldest.Position, t),
+        };
+
+        float sqrDistance = MathExtensions.SqrDistance(claimed.Position, lerpedPosition);
+
+        if (sqrDistance < minSqrDistance)
+        {
+            minSqrDistance = sqrDistance;
+
+            // Add a little bit of client authority.
+            // Increases the accuracy without meaningfully harming the security
+            best.Position = Vector3.MoveTowards(lerpedPosition, claimed.Position, 0.1f);
+            best.Timestamp = Mathf.Lerp(newest.Timestamp, oldest.Timestamp, t);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    static bool TryFindBetterRotation(BacktrackEntry newest, BacktrackEntry claimed, ref BacktrackEntry best, ref float minAngle)
+    {
+        float angle = Quaternion.Angle(newest.Rotation, claimed.Rotation);
+
+        if (angle < minAngle)
+        {
+            minAngle = angle;
+            best.Rotation = Quaternion.RotateTowards(newest.Rotation, claimed.Rotation, 1);
+            return true;
+        }
+
+        return false;
     }
 
     public static BacktrackHistory Get(Player player)

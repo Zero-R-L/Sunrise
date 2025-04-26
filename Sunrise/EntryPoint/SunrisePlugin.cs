@@ -11,7 +11,7 @@ public class SunrisePlugin : Plugin<Config>
     public override string Name { get; } = "Sunrise";
     public override string Author { get; } = "BanalnyBanan";
     public override Version RequiredExiledVersion { get; } = new(9, 5, 1);
-    public override Version Version { get; } = new(1, 4, 3);
+    public override Version Version { get; } = new(1, 4, 4);
     public override PluginPriority Priority { get; } = PluginPriority.Highest;
 
     public SunriseLoader Loader { get; } = new();

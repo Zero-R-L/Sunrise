@@ -33,6 +33,9 @@ internal class ServersideTeslaDamageModule : PluginModule
         if (!Config.Instance.ServersideTeslaDamage)
             return;
 
+        if (tesla == null)
+            return;
+
         try
         {
             ServersideTeslaHitreg.Get(tesla).Burst();

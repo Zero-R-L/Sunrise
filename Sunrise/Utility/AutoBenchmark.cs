@@ -12,12 +12,18 @@ internal class AutoBenchmark(string targetName, float reportInterval = 10)
 
     public void Start()
     {
+        if (!Enabled)
+            return;
+
         _consumedTime.Start();
         _totalTime.Start();
     }
 
     public void Stop()
     {
+        if (!Enabled)
+            return;
+
         _consumedTime.Stop();
 
         if (_totalTime.Elapsed.TotalSeconds >= reportInterval)
